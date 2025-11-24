@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
-import { storage, db } from "../../../lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
 import jokesData from "../../data/jokes.json";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
@@ -14,9 +11,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No input" }, { status: 400 });
 
     // Prepare prompt including local jokes as context
-    const prompt = `Using these jokes as inspiration: ${JSON.stringify(
-      jokesData.slice(0, 50) // maybe limit to first 50 for performance
-    )}, write a short witty joke about: "${userInput}"`;
+    const prompt = `You are a professional comedian. Your goal is to write a short, witty, and hilarious joke about: "${userInput}".
+    
+    Here are some examples of the style of jokes we are looking for:
+    ${JSON.stringify(jokesData.slice(0, 20))}
+
+    Requirements:
+    - The joke should be original and creative.
+    - Keep it concise and punchy.
+    - Do not explain the joke.
+    - Just return the joke text.`;
 
     // Generate joke
     const jokeResp = await ai.models.generateContent({

@@ -96,7 +96,7 @@ Now create a new, original joke using keywords: "${keywords}" and user descripti
     try {
       const docRef = await addDoc(collection(db, "jokes"), {
         joke,
-        userInput,
+        userInput: userInput || "",
         createdAt: new Date().toISOString(),
       });
       console.log("Joke saved to Firestore, doc ID:", docRef.id);
