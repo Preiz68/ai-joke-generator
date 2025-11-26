@@ -1,31 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import HistoryPanel from "./HistoryPanel";
 import { motion } from "framer-motion";
-import { Search, Laugh, Skull, Cpu, Dog, Zap, Sparkles, X } from "lucide-react";
+import { Search, X } from "lucide-react";
+import { jokeStore } from "../store/useStore";
+import { categories } from "../constants/categories";
 
-const categories = [
-  { name: "Dark Humor", icon: Skull },
-  { name: "Dad Jokes", icon: Laugh },
-  { name: "Tech Jokes", icon: Cpu },
-  { name: "Animal Jokes", icon: Dog },
-  { name: "One-Liners", icon: Zap },
-  { name: "Random", icon: Sparkles },
-];
-
-export default function Sidebar({
-  history,
-  onCategorySelect,
-  isSidebarOpen,
-  setIsSidebarOpen,
-}) {
+export default function Sidebar() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeCategory, setActiveCategory] = useState("Random");
+  const [isDesktop, setIsDesktop] = useState(false);
 
-  const handleCategoryClick = (category) => {
-    setActiveCategory(category);
-    onCategorySelect?.(category);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const {
+    isSidebarOpen,
+    setIsSidebarOpen,
+    selectedCategory,
+    setSelectedCategory,
+  } = jokeStore();
+
+  const handleCategoryClick = (category: string) => {
+    setSelectedCategory?.(category);
   };
 
   return (
@@ -40,11 +44,11 @@ export default function Sidebar({
 
       {/* SIDEBAR PANEL */}
       <motion.div
-        initial={{ x: "-100%" }}
-        animate={{ x: isSidebarOpen ? "0%" : "-100%" }}
-        transition={{ duration: 0.35 }}
+        initial={{ x: isDesktop ? "0%" : "-100%" }}
+        animate={{ x: isDesktop || isSidebarOpen ? "0%" : "-100%" }}
+        transition={{ duration: isDesktop ? 0 : 0.35 }}
         className="
-          fixed md:relative z-30
+          fixed md:relative z-30 scrollbar-custom
           w-[80%] md:w-full
           top-0 left-0 h-full
           bg-gray-100 dark:bg-gray-900
@@ -94,7 +98,7 @@ export default function Sidebar({
           <div className="md:grid md:grid-cols-2 flex flex-col gap-3 p-2">
             {categories.map((cat) => {
               const Icon = cat.icon;
-              const isActive = activeCategory === cat.name;
+              const isActive = selectedCategory === cat.name;
 
               return (
                 <button
@@ -122,7 +126,7 @@ export default function Sidebar({
         </div>
 
         {/* HISTORY */}
-        <HistoryPanel history={history} />
+        <HistoryPanel searchTerm={searchTerm} />
       </motion.div>
     </>
   );

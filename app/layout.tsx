@@ -11,7 +11,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata = {
   title: "Risus (AI-Joke Generator)",
   description: "AI powered joke generator that creates jokes along with images",
-  icons: { icon: "/favicon.svg" },
+  icons: { icon: "/favicon.png" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

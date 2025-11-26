@@ -1,19 +1,26 @@
 "use client";
 
+import { jokeStore } from "../store/useStore";
 
-interface HistoryPanelProps {
-  history: string[];
-}
+export default function HistoryPanel({ searchTerm }: { searchTerm: string }) {
+  const { history, setJoke } = jokeStore();
 
-export default function HistoryPanel({ history }: HistoryPanelProps) {
+  const filteredHistory = history.filter((item) =>
+    item.joke.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div>
+    <div className="w-full h-full overflow-y-auto">
       <h4 className="font-semibold mb-2">History</h4>
-      {history.length > 0 ? (
-        <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-          {history.map((h, i) => (
-            <div key={i} className="p-2 truncate">
-              {h}
+      {filteredHistory.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          {filteredHistory.map((h, i) => (
+            <div
+              key={i}
+              onClick={() => setJoke(h.joke)}
+              className="p-2 truncate cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              {h.joke}
             </div>
           ))}
         </div>

@@ -1,19 +1,18 @@
 "use client";
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
-import {
-  ArrowUp,
-  Smile,
-  Ghost,
-  Bot,
-  ThumbsUp,
-  ThumbsDown,
-  Menu,
-} from "lucide-react";
+import { ArrowUp, Smile, Ghost, Bot, Menu, Star } from "lucide-react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-
-type Rating = "up" | "down";
+import {
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+} from "firebase/firestore";
+import { HistoryItem, jokeStore } from "../store/useStore";
+import { db } from "../lib/firebase";
 
 const categories = [
   { name: "Funny", icon: <Smile size={20} /> },
@@ -21,52 +20,90 @@ const categories = [
   { name: "Tech", icon: <Bot size={20} /> },
 ];
 
+const starRating = [1, 2, 3, 4];
+
 export default function JokeFetcher() {
   const [userInput, setUserInput] = useState("");
-  const [joke, setJoke] = useState<string | null>(null);
-  const [image, setImage] = useState<string | null>(null);
   const [loadingJoke, setLoadingJoke] = useState(false);
-  const [loadingImage, setLoadingImage] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
-  const [rating, setRating] = useState<Rating | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const {
+    joke,
+    setJoke,
+    history,
+    setHistory,
+    setIsSidebarOpen,
+    selectedCategory,
+    setSelectedCategory,
+    rating,
+    setRating,
+  } = jokeStore();
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("joke_history") || "[]");
-    setHistory(saved);
-  }, []);
+    // Reference to the jokes collection
+    const jokesRef = collection(db, "jokes");
 
-  const saveToHistory = (text: string) => {
-    const updated = [text, ...history].slice(0, 50);
-    setHistory(updated);
-    localStorage.setItem("joke_history", JSON.stringify(updated));
-  };
+    // Optional: order by creation date descending
+    const q = query(jokesRef, orderBy("createdAt", "desc"));
+
+    // Listen in real-time
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const jokes = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as HistoryItem),
+      }));
+      setHistory(jokes);
+      console.log("History updated:", jokes);
+    });
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, [setHistory]);
 
   const generateJoke = async () => {
     if (!userInput && !selectedCategory) return;
     setLoadingJoke(true);
     setJoke(null);
-    setImage(null);
     setRating(null);
 
     try {
-      const res = await fetch("/api/gen-joke-and-img", {
+      const res = await fetch("/api/joke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userInput, category: selectedCategory }),
       });
       const data = await res.json();
-      setJoke(data.joke || "No joke generated.");
-      saveToHistory(data.joke);
-      setImage(data.image || null);
+      const newJoke = data.joke;
+
+      if (newJoke && newJoke !== "No joke generated.") {
+        setJoke(newJoke);
+        setHistory((prev) => [
+          {
+            id: Date.now().toString(),
+            joke: newJoke,
+            category: selectedCategory || "General",
+          },
+          ...prev,
+        ]);
+        // Save to Firestore
+        try {
+          await addDoc(collection(db, "jokes"), {
+            joke: newJoke,
+            category: selectedCategory || "General",
+            createdAt: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.error("Error saving to Firestore: ", e);
+        }
+      } else {
+        setJoke("No joke generated.");
+      }
     } catch {
       setJoke("Error generating joke.");
     }
     setLoadingJoke(false);
   };
 
-  const sendFeedback = async (rate: Rating) => {
+  const sendFeedback = async (rate: number | null) => {
     if (!joke) return;
     setRating(rate);
 
@@ -84,8 +121,8 @@ export default function JokeFetcher() {
   return (
     <div
       className="
-        relative w-full min-h-screen md:grid md:grid-cols-12 
-        transition-colors overflow-x-hidden 
+        relative w-full h-screen md:grid md:grid-cols-12 
+        transition-colors overflow-x-hidden overflow-y-hidden
         bg-white dark:bg-gray-900 text-gray-900 dark:text-white
       "
     >
@@ -99,11 +136,7 @@ export default function JokeFetcher() {
       </button>
 
       <div className="md:col-span-4">
-        <Sidebar
-          history={history}
-          onCategorySelect={setSelectedCategory}
-          {...{ isSidebarOpen, setIsSidebarOpen }}
-        />
+        <Sidebar />
       </div>
 
       <div className="md:col-span-8 flex flex-col w-full h-screen items-center justify-around relative z-10 p-6 md:p-12">
@@ -148,9 +181,9 @@ export default function JokeFetcher() {
             onChange={(e) => setUserInput(e.target.value)}
             placeholder="Customize your Joke"
             className="
-              flex-1 p-3 sm:p-4 text-base sm:text-lg rounded-full
+              flex-1 p-2 sm:p-4 text-base sm:text-lg rounded-full
               border border-gray-300 dark:border-gray-700
-              bg-white dark:bg-gray-800
+              bg-white dark:bg-gray-800 text-center placeholder:text-center
               placeholder-gray-500 dark:placeholder-gray-400
               focus:outline-none focus:ring-2 focus:ring-indigo-500
             "
@@ -184,9 +217,9 @@ export default function JokeFetcher() {
         {/* Joke */}
         <div className="min-h-16 mb-4 text-center text-base sm:text-lg md:text-xl">
           {loadingJoke ? (
-            "Thinking..."
+            "Generating..."
           ) : joke ? (
-            <div className="max-w-xl rounded backdrop-blur-lg p-8 shadow text-base sm:text-2xl md:text-3xl bg-white/60 dark:bg-gray-800/60">
+            <div className="max-w-xl rounded backdrop-blur-lg p-6 shadow text-base sm:text-xl md:text-2xl bg-white/60 dark:bg-gray-800/60">
               {`"${joke}"`}
             </div>
           ) : (
@@ -198,32 +231,38 @@ export default function JokeFetcher() {
 
         {/* Feedback */}
         {joke && (
-          <div className="flex justify-between items-center gap-3">
-            <p className="text-yellow-700 dark:text-yellow-500 text-xl">
+          <div className="flex flex-col md:flex-row justify-center items-center gap-4 w-full">
+            <p className="text-yellow-700 dark:text-yellow-500 text-lg md:text-xl font-medium">
               Rate the Joke :
             </p>
-            <div className="flex gap-3 justify-between items-center rounded-full px-5 py-3 shadow-lg bg-white dark:bg-gray-800">
-              <button
-                onClick={() => sendFeedback("up")}
-                className={`text-2xl sm:text-3xl transition ${
-                  rating === "up"
-                    ? "text-green-500"
-                    : "text-gray-500 dark:text-gray-400"
-                }`}
-              >
-                <ThumbsUp size={24} />
-              </button>
 
-              <button
-                onClick={() => sendFeedback("down")}
-                className={`text-2xl sm:text-3xl transition ${
-                  rating === "down"
-                    ? "text-red-500"
-                    : "text-gray-500 dark:text-gray-400"
-                }`}
-              >
-                <ThumbsDown size={24} />
-              </button>
+            <div className="flex gap-2 sm:gap-3 md:gap-4 items-center rounded-full px-4 py-2 sm:px-5 sm:py-3 shadow-lg bg-white dark:bg-gray-800 w-auto justify-center">
+              {starRating.map((star) => {
+                const value = star * 2.5;
+                const isFilled = (rating || 0) >= value;
+
+                return (
+                  <button
+                    key={star}
+                    onClick={() => {
+                      const newRating = rating === value ? value - 2.5 : value;
+                      sendFeedback(newRating === 0 ? null : newRating);
+                    }}
+                    className={`transition-colors duration-200 ${
+                      isFilled
+                        ? "text-yellow-500"
+                        : "text-gray-300 dark:text-gray-600"
+                    }`}
+                  >
+                    <Star
+                      size={22}
+                      className="sm:w-6 sm:h-6 md:w-7 md:h-7"
+                      fill={isFilled ? "currentColor" : "none"}
+                      strokeWidth={isFilled ? 0 : 2}
+                    />
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
