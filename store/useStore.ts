@@ -11,7 +11,9 @@ interface JokeState {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isSidebarOpen: boolean) => void;
   history: HistoryItem[];
-  setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>;
+  setHistory: (
+    updater: HistoryItem[] | ((prev: HistoryItem[]) => HistoryItem[])
+  ) => void;
   selectedCategory: string | null;
   setSelectedCategory: (selectedCategory: string | null) => void;
   rating: number | null;
